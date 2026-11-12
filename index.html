@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Eksplorasi 3D: Mengurai Bangun Ruang (Kelas 6)</title>
+    <!-- Tailwind CSS untuk tata letak responsif dan modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js untuk render 3D interaktif -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls agar gambar 3D bisa diputar, digeser, dan di-zoom dengan sentuhan/mouse -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Tone.js untuk efek suara interaktif -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Google Fonts: Fredoka & Plus Jakarta Sans -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow: hidden;
+            touch-action: none; /* Mencegah scroll halaman saat menggeser objek di Smartboard */
+            user-select: none;
+        }
+        h1, h2, .font-display {
+            font-family: 'Fredoka', sans-serif;
+        }
+        /* Kustomisasi Range Slider untuk Smartboard (besar & mudah disentuh) */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 32px;
+            width: 32px;
+            border-radius: 50%;
+            background: #f59e0b;
+            border: 4px solid #ffffff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            margin-top: -10px;
+            transition: transform 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+            background: #d97706;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 999px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        /* Animasi pop untuk notifikasi */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 h-screen w-screen flex flex-col relative">
+
+    <!-- Area Canvas 3D Utama (Layar Penuh) -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- HEADER / BAR ATAS (Kontrol Mode & Navigasi Soal Latihan) -->
+    <header class="relative z-10 flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 pointer-events-none">
+        <!-- Judul & Mode Switcher -->
+        <div class="glass-panel rounded-2xl p-2 md:p-3 shadow-lg flex items-center gap-3 pointer-events-auto">
+            <div class="bg-amber-500 text-white p-2.5 rounded-xl shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg md:text-xl font-bold text-slate-800 leading-tight">Mengurai Bangun Ruang</h1>
+                <p class="text-xs text-slate-500 font-semibold">Matematika Kelas 6 • Papan Interaktif</p>
+            </div>
+            
+            <!-- Tombol Pilih Materi: Kubus vs Balok -->
+            <div class="flex bg-slate-200/80 p-1 rounded-xl ml-2">
+                <button id="btn-mode-kubus" onclick="setMode('kubus')" class="px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all bg-amber-500 text-white shadow">
+                    🟫 Kubus
+                </button>
+                <button id="btn-mode-balok" onclick="setMode('balok')" class="px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all text-slate-600 hover:text-slate-900">
+                    🟦 Balok
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigasi Latihan Soal (Mirip dengan pola LKPD) -->
+        <div class="glass-panel rounded-2xl p-2 md:p-3 shadow-lg flex items-center gap-2 pointer-events-auto">
+            <span class="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider px-2 hidden sm:inline">Latihan:</span>
+            <div id="level-buttons" class="flex gap-1.5 overflow-x-auto max-w-[50vw] sm:max-w-none">
+                <!-- Tombol level akan diisi oleh JavaScript -->
+            </div>
+        </div>
+    </header>
+
+    <!-- PANEL KIRI: Petunjuk Interaksi & Mode Sentuh -->
+    <aside class="relative z-10 px-3 md:px-4 mt-1 flex flex-col gap-3 max-w-xs pointer-events-none">
+        <div class="glass-panel rounded-2xl p-3.5 shadow-lg pointer-events-auto">
+            <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span>🖐️</span> Kontrol Papan Sentuh
+            </h2>
+            <div class="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600">
+                <div class="bg-slate-100 p-2 rounded-xl flex items-center gap-2">
+                    <span class="text-base">🔄</span> <span>Geser 1 Jari: Putar 3D</span>
+                </div>
+                <div class="bg-slate-100 p-2 rounded-xl flex items-center gap-2">
+                    <span class="text-base">🤏</span> <span>Cubit / 2 Jari: Zoom & Geser</span>
+                </div>
+            </div>
+
+            <!-- Toggle Mode Klik Balok -->
+            <div class="mt-3 pt-3 border-t border-slate-200">
+                <p class="text-xs font-bold text-slate-500 mb-1.5">Aksi Saat Menyentuh Satuan:</p>
+                <div class="grid grid-cols-2 gap-1.5 bg-slate-200/80 p-1 rounded-xl">
+                    <button id="tool-inspect" onclick="setClickTool('inspect')" class="py-2 px-2 rounded-lg text-xs font-bold bg-white text-amber-600 shadow transition">
+                        ✨ Tandai Hitung
+                    </button>
+                    <button id="tool-hide" onclick="setClickTool('hide')" class="py-2 px-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition">
+                        👁️ Lepas/Sembunyi
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tombol Reset Tampilan -->
+            <div class="mt-3 flex gap-2">
+                <button onclick="resetCameraAndBlocks()" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow">
+                    <span>↺</span> Susun Ulang & Reset Sudut
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- PANEL KANAN: Papan Hitung & Cek Jawaban Siswa -->
+    <aside class="fixed right-3 md:right-4 top-20 md:top-24 z-10 w-64 md:w-72 pointer-events-none">
+        <div class="glass-panel rounded-2xl p-4 shadow-xl pointer-events-auto border-2 border-white">
+            <div class="flex items-center justify-between mb-2">
+                <span id="shape-title" class="font-display font-bold text-lg text-slate-800">Susunan Tangga</span>
+                <span id="badge-type" class="text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Kubus Satuan</span>
+            </div>
+            <p id="shape-desc" class="text-xs text-slate-600 mb-3 leading-relaxed">
+                Geser tombol <b>Uraikan</b> di bawah untuk melihat kubus yang tersembunyi di bagian belakang!
+            </p>
+
+            <!-- Penghitung Interaktif (Saat siswa menandai balok) -->
+            <div class="bg-slate-100 rounded-xl p-3 mb-3 flex items-center justify-between border border-slate-200">
+                <div>
+                    <div class="text-[11px] font-bold text-slate-500 uppercase">Ditandai / Dihitung</div>
+                    <div class="text-xs text-slate-400">Sentuh balok untuk menandai</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="marked-count" class="font-display text-2xl font-bold text-amber-600">0</span>
+                    <button onclick="clearMarks()" title="Hapus tanda" class="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 text-xs font-bold">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Input Jawaban Siswa -->
+            <div class="bg-blue-50/90 rounded-xl p-3 border border-blue-200">
+                <label class="block text-xs font-bold text-blue-900 mb-1.5">Berapa jumlah seluruh satuan?</label>
+                <div class="flex items-center gap-2">
+                    <button onclick="adjustAnswer(-1)" class="w-11 h-11 rounded-xl bg-white border border-blue-200 font-bold text-xl text-blue-700 hover:bg-blue-100 active:scale-95 shadow-sm">−</button>
+                    <input type="number" id="student-answer" value="0" min="0" max="100" class="w-full h-11 text-center font-display font-bold text-2xl text-slate-800 bg-white border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="adjustAnswer(1)" class="w-11 h-11 rounded-xl bg-white border border-blue-200 font-bold text-xl text-blue-700 hover:bg-blue-100 active:scale-95 shadow-sm">+</button>
+                </div>
+                <button onclick="checkAnswer()" class="mt-2.5 w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold rounded-xl shadow-md transition text-sm flex items-center justify-center gap-2">
+                    <span>✓</span> Periksa Jawaban
+                </button>
+            </div>
+
+            <!-- Umpan Balik Jawaban -->
+            <div id="feedback-box" class="hidden mt-3 p-3 rounded-xl text-xs font-bold animate-pop"></div>
+        </div>
+    </aside>
+
+    <!-- FOOTER / BAR BAWAH: Slider Pengurai Bangun Ruang (Exploded View) & Lapisan -->
+    <footer class="mt-auto relative z-10 p-3 md:p-5 flex justify-center pointer-events-none">
+        <div class="glass-panel rounded-3xl p-4 md:px-7 md:py-4 shadow-2xl w-full max-w-3xl pointer-events-auto border-2 border-white">
+            <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+                
+                <!-- Slider Utama: Uraikan Bangun Ruang -->
+                <div class="w-full flex-1">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label for="explode-slider" class="font-display font-bold text-base md:text-lg text-slate-800 flex items-center gap-2">
+                            <span>💥</span> Uraikan Susunan (Pisahkan Satuan)
+                        </label>
+                        <span id="explode-percent" class="text-xs font-extrabold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">0% (Rapat)</span>
+                    </div>
+                    <input type="range" id="explode-slider" min="0" max="100" value="0" oninput="onExplodeChange(this.value)" class="w-full">
+                    <div class="flex justify-between text-[11px] font-bold text-slate-400 mt-1">
+                        <span>Rapat (Soal Asli)</span>
+                        <span>Renggang (Lihat Bagian Dalam)</span>
+                        <span>Terurai Penuh</span>
+                    </div>
+                </div>
+
+                <!-- Tombol Cepat: Urai Otomatis & Irisan Lapisan -->
+                <div class="flex items-center gap-2 w-full md:w-auto justify-center">
+                    <button id="btn-auto-explode" onclick="toggleAutoExplode()" class="px-4 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-2xl shadow-md transition text-sm whitespace-nowrap flex items-center gap-2">
+                        <span>✨</span> <span id="auto-explode-text">Uraikan!</span>
+                    </button>
+                    <button onclick="cycleLayerFilter()" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-2xl shadow-md transition text-sm whitespace-nowrap flex items-center gap-2" title="Tampilkan per lapisan tinggi">
+                        <span>🍰</span> <span id="layer-btn-text">Semua Lapis</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ==========================================
+        // 1. DATA MODEL BANGUN RUANG (KUBUS & BALOK)
+        // ==========================================
+        // Setiap objek memiliki koordinat grid (x, y, z)
+        // y = 0 adalah lapisan paling bawah (lantai)
+        const SHAPES_DATA = {
+            kubus: [
+                {
+                    id: 'k1',
+                    title: 'Latihan 1: Tangga 3 Tingkat',
+                    desc: 'Perhatikan kolom paling kiri! Ada kubus di bagian bawah yang menyangga kubus di atasnya.',
+                    unitSize: { x: 1, y: 1, z: 1 },
+                    // Bentuk seperti soal no 1 di LKPD Kubus (3 + 2 + 1 = 6)
+                    blocks: [
+                        // Kolom kiri (tinggi 3)
+                        {x: -1, y: 0, z: 0}, {x: -1, y: 1, z: 0}, {x: -1, y: 2, z: 0},
+                        // Kolom tengah (tinggi 2)
+                        {x: 0, y: 0, z: 0},  {x: 0, y: 1, z: 0},
+                        // Kolom kanan (tinggi 1)
+                        {x: 1, y: 0, z: 0}
+                    ]
+                },
+                {
+                    id: 'k2',
+                    title: 'Latihan 2: Menara Tengah',
+                    desc: 'Hitung menara yang menjulang di tengah, lalu tambahkan kubus di sisi kiri dan kanannya.',
+                    unitSize: { x: 1, y: 1, z: 1 },
+                    // Bentuk seperti soal no 2 di LKPD Kubus (1 + 3 + 1 = 5)
+                    blocks: [
+                        {x: -1, y: 0, z: 0},
+                        {x: 0, y: 0, z: 0}, {x: 0, y: 1, z: 0}, {x: 0, y: 2, z: 0},
+                        {x: 1, y: 0, z: 0}
+                    ]
+                },
+                {
+                    id: 'k3',
+                    title: 'Latihan 3: Tangga Ganda',
+                    desc: 'Hati-hati! Di bawah tangga atas terdapat kubus tersembunyi di lapisan dasar. Uraikan untuk melihatnya!',
+                    unitSize: { x: 1, y: 1, z: 1 },
+                    // Bentuk seperti soal no 4 di LKPD Kubus (2x2 bawah + 2x1 atas = 6)
+                    blocks: [
+                        // Lapisan bawah (2x2)
+                        {x: -0.5, y: 0, z: -0.5}, {x: 0.5, y: 0, z: -0.5},
+                        {x: -0.5, y: 0, z: 0.5},  {x: 0.5, y: 0, z: 0.5},
+                        // Lapisan atas belakang (2)
+                        {x: -0.5, y: 1, z: -0.5}, {x: 0.5, y: 1, z: -0.5}
+                    ]
+                },
+                {
+                    id: 'k4',
+                    title: 'Latihan 4: Kubus Besar Penuh',
+                    desc: 'Susunan 3 × 3 dengan tinggi 2 lapis. Coba gunakan tombol "Semua Lapis" untuk melihat tiap lapisannya!',
+                    unitSize: { x: 1, y: 1, z: 1 },
+                    // Bentuk seperti soal no 5 di LKPD Kubus (3x3x2 = 18)
+                    blocks: (() => {
+                        const arr = [];
+                        for(let y=0; y<2; y++) {
+                            for(let x=-1; x<=1; x++) {
+                                for(let z=-1; z<=1; z++) {
+                                    arr.push({x, y, z});
+                                }
+                            }
+                        }
+                        return arr;
+                    })()
+                },
+                {
+                    id: 'k5',
+                    title: 'Latihan 5: Bingkai Berlubang',
+                    desc: 'Perhatikan bagian tengahnya berlubang sampai ke dasar. Ada berapa kubus yang menyusun pinggirannya?',
+                    unitSize: { x: 1, y: 1, z: 1 },
+                    // Bentuk seperti soal no 8 di LKPD Kubus (3x3 - 1 = 8)
+                    blocks: (() => {
+                        const arr = [];
+                        for(let x=-1; x<=1; x++) {
+                            for(let z=-1; z<=1; z++) {
+                                if (x === 0 && z === 0) continue; // Lubang tengah
+                                arr.push({x, y: 0, z});
+                            }
+                        }
+                        return arr;
+                    })()
+                }
+            ],
+            balok: [
+                {
+                    id: 'b1',
+                    title: 'Latihan 1: Tumpukan Balok Sederhana',
+                    desc: 'Balok-balok disusun mendatar dan bertumpuk. Geser slider untuk memisahkan setiap balok satuan.',
+                    unitSize: { x: 1.8, y: 0.75, z: 1.0 },
+                    // 2 kolom x 2 lapis + 1 di samping = 5 balok
+                    blocks: [
+                        {x: -0.5, y: 0, z: 0}, {x: -0.5, y: 1, z: 0}, {x: -0.5, y: 2, z: 0},
+                        {x: 0.5, y: 0, z: 0},  {x: 0.5, y: 1, z: 0}
+                    ]
+                },
+                {
+                    id: 'b2',
+                    title: 'Latihan 2: Dinding Bata 2 Lapis',
+                    desc: 'Perhatikan kedalaman balok ke arah belakang! Ada baris depan dan baris belakang.',
+                    unitSize: { x: 1.6, y: 0.7, z: 0.9 },
+                    // 2 lebar x 2 dalam x 2 tinggi = 8 balok
+                    blocks: (() => {
+                        const arr = [];
+                        for(let y=0; y<2; y++) {
+                            for(let x=-0.5; x<=0.5; x+=1) {
+                                for(let z=-0.5; z<=0.5; z+=1) {
+                                    arr.push({x, y, z});
+                                }
+                            }
+                        }
+                        return arr;
+                    })()
+                },
+                {
+                    id: 'b3',
+                    title: 'Latihan 3: Tangga Balok',
+                    desc: 'Setiap anak tangga tersusun dari balok-balok yang menopang bagian atasnya.',
+                    unitSize: { x: 1.5, y: 0.65, z: 1.0 },
+                    // Tangga 3 tingkat balok: 3 + 2 + 1 = 6 balok
+                    blocks: [
+                        {x: -1, y: 0, z: -0.5}, {x: -1, y: 1, z: -0.5}, {x: -1, y: 2, z: -0.5},
+                        {x: 0, y: 0, z: -0.5},  {x: 0, y: 1, z: -0.5},
+                        {x: 1, y: 0, z: -0.5},
+                        // Tambahan di depan
+                        {x: -1, y: 0, z: 0.5},  {x: 0, y: 0, z: 0.5}
+                    ]
+                },
+                {
+                    id: 'b4',
+                    title: 'Latihan 4: Menara Balok Bersilang',
+                    desc: 'Uraikan susunan balok ini agar terlihat jelas bagian dasar yang tertutup di bawah.',
+                    unitSize: { x: 1.6, y: 0.7, z: 0.9 },
+                    blocks: [
+                        // Lapis 0 (3x2 = 6)
+                        {x: -1, y: 0, z: -0.5}, {x: 0, y: 0, z: -0.5}, {x: 1, y: 0, z: -0.5},
+                        {x: -1, y: 0, z: 0.5},  {x: 0, y: 0, z: 0.5},  {x: 1, y: 0, z: 0.5},
+                        // Lapis 1 (tengah 2)
+                        {x: 0, y: 1, z: -0.5},  {x: 0, y: 1, z: 0.5},
+                        // Lapis 2 (puncak 1)
+                        {x: 0, y: 2, z: 0}
+                    ]
+                }
+            ]
+        };
+
+        // ==========================================
+        // 2. STATE APLIKASI
+        // ==========================================
+        let currentMode = 'kubus'; // 'kubus' atau 'balok'
+        let currentLevelIdx = 0;
+        let clickTool = 'inspect'; // 'inspect' (tandai) atau 'hide' (sembunyikan)
+        let explodeFactor = 0;     // 0 hingga 1
+        let targetExplode = 0;
+        let isAutoExploded = false;
+        let layerFilter = 'all';   // 'all', 0, 1, 2...
+        let maxLayerInShape = 0;
+
+        // Variabel Three.js
+        let scene, camera, renderer, controls;
+        let blockMeshes = [];
+        let gridHelper;
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let pointerDownPos = { x: 0, y: 0 };
+
+        // ==========================================
+        // 3. AUDIO EFEK SEDERHANA (TONE.JS)
+        // ==========================================
+        let synth;
+        function playPopSound(freq = 520) {
+            try {
+                if (!synth) {
+                    synth = new Tone.Synth({
+                        oscillator: { type: 'sine' },
+                        envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
+                    }).toDestination();
+                    synth.volume.value = -10;
+                }
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                synth.triggerAttackRelease(freq, '16n');
+            } catch (e) {
+                // Abaikan jika audio diblokir browser
+            }
+        }
+
+        // ==========================================
+        // 4. INISIALISASI SCENE 3D (THREE.JS)
+        // ==========================================
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene dengan latar belakang gradasi gelap elegan agar kontras di Smartboard
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.025);
+
+            // Kamera Perspektif
+            camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(5.5, 5.2, 6.5);
+
+            // Renderer dengan Anti-alias dan Shadow
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls: Memungkinkan putar 1 jari, zoom & pan 2 jari (sangat cocok untuk Smartboard)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.07;
+            controls.minDistance = 3;
+            controls.maxDistance = 18;
+            controls.maxPolarAngle = Math.PI / 2 + 0.15; // Agar tidak terlalu menembus lantai
+            controls.target.set(0, 0.8, 0);
+
+            // Pencahayaan Studio 3 Titik agar sisi-sisi kubus/balok terlihat jelas batasnya
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight.position.set(6, 12, 8);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
+            fillLight.position.set(-6, 4, -6);
+            scene.add(fillLight);
+
+            // Lantai Grid sebagai referensi ruang
+            gridHelper = new THREE.GridHelper(14, 14, 0x334155, 0x1e293b);
+            gridHelper.position.y = -0.01;
+            scene.add(gridHelper);
+
+            // Plane penerima bayangan
+            const planeGeo = new THREE.PlaneGeometry(20, 20);
+            const planeMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+            const shadowPlane = new THREE.Mesh(planeGeo, planeMat);
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.position.y = -0.005;
+            shadowPlane.receiveShadow = true;
+            scene.add(shadowPlane);
+
+            // Event Listener untuk Interaksi Sentuh / Klik pada Kubus/Balok
+            const domElem = renderer.domElement;
+            domElem.addEventListener('pointerdown', (e) => {
+                pointerDownPos = { x: e.clientX, y: e.clientY };
+            });
+
+            domElem.addEventListener('pointerup', (e) => {
+                // Pastikan ini adalah ketukan (tap), bukan gerakan menggeser/memutar kamera
+                const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (dist < 8) {
+                    handleBlockTap(e.clientX, e.clientY);
+                }
+            });
+
+            // Responsif saat ukuran layar / Smartboard berubah
+            window.addEventListener('resize', onWindowResize);
+
+            // Muat bentuk pertama
+            renderLevelButtons();
+            loadShape(currentMode, 0);
+            animate();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ==========================================
+        // 5. MEMBANGUN KUBUS / BALOK 3D DENGAN TEKSTUR
+        // ==========================================
+        // Membuat tekstur kayu/garis halus secara prosedural (tanpa gambar eksternal)
+        function createBlockTexture(mode) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            if (mode === 'kubus') {
+                // Warna kayu cokelat hangat (menyesuaikan LKPD Kubus Cokelat)
+                ctx.fillStyle = '#d98a3c';
+                ctx.fillRect(0, 0, 256, 256);
+
+                // Serat kayu halus
+                ctx.strokeStyle = 'rgba(146, 64, 14, 0.18)';
+                ctx.lineWidth = 3;
+                for (let i = 0; i < 256; i += 14) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.bezierCurveTo(85, i + 6, 170, i - 6, 256, i);
+                    ctx.stroke();
+                }
+
+                // Bingkai tepi yang tegas
+                ctx.strokeStyle = '#78350f';
+                ctx.lineWidth = 10;
+                ctx.strokeRect(0, 0, 256, 256);
+            } else {
+                // Warna biru cerah minimalis (menyesuaikan LKPD Balok Biru Putih)
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(0, 0, 256, 256);
+
+                // Gradasi lembut
+                const grad = ctx.createLinearGradient(0, 0, 256, 256);
+                grad.addColorStop(0, 'rgba(255,255,255,0.25)');
+                grad.addColorStop(1, 'rgba(3,105,161,0.25)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 256, 256);
+
+                // Bingkai tepi tegas
+                ctx.strokeStyle = '#0369a1';
+                ctx.lineWidth = 10;
+                ctx.strokeRect(0, 0, 256, 256);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function loadShape(mode, index) {
+            currentMode = mode;
+            currentLevelIdx = index;
+            const shapeData = SHAPES_DATA[mode][index];
+
+            // Bersihkan mesh lama dari scene
+            blockMeshes.forEach(mesh => scene.remove(mesh));
+            blockMeshes = [];
+
+            // Reset state UI
+            explodeFactor = 0;
+            targetExplode = 0;
+            isAutoExploded = false;
+            layerFilter = 'all';
+            document.getElementById('explode-slider').value = 0;
+            document.getElementById('explode-percent').innerText = '0% (Rapat)';
+            document.getElementById('auto-explode-text').innerText = 'Uraikan!';
+            document.getElementById('layer-btn-text').innerText = 'Semua Lapis';
+            document.getElementById('student-answer').value = 0;
+            document.getElementById('feedback-box').classList.add('hidden');
+            updateMarkedCounter();
+
+            // Update Teks Informasi
+            document.getElementById('shape-title').innerText = shapeData.title;
+            document.getElementById('shape-desc').innerText = shapeData.desc;
+            const badge = document.getElementById('badge-type');
+            if (mode === 'kubus') {
+                badge.innerText = 'Kubus Satuan';
+                badge.className = 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800';
+            } else {
+                badge.innerText = 'Balok Satuan';
+                badge.className = 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800';
+            }
+
+            // Hitung pusat massa agar animasi "Uraikan" memekar simetris dari tengah
+            let sumX = 0, sumY = 0, sumZ = 0;
+            maxLayerInShape = 0;
+            shapeData.blocks.forEach(b => {
+                sumX += b.x;
+                sumY += b.y;
+                sumZ += b.z;
+                if (b.y > maxLayerInShape) maxLayerInShape = b.y;
+            });
+            const count = shapeData.blocks.length;
+            const centerGrid = { x: sumX / count, y: sumY / count, z: sumZ / count };
+
+            // Geometri & Material Satuan
+            const u = shapeData.unitSize;
+            const geometry = new THREE.BoxGeometry(u.x, u.y, u.z);
+            const texture = createBlockTexture(mode);
+
+            shapeData.blocks.forEach((b, idx) => {
+                const material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.45,
+                    metalness: 0.05
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // Garis tepi hitam/cokelat tajam (EdgesGeometry) agar batas antar satuan sangat jelas
+                const edges = new THREE.EdgesGeometry(geometry);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: mode === 'kubus' ? 0x451a03 : 0x0c4a6e,
+                    linewidth: 2
+                });
+                const wireframe = new THREE.LineSegments(edges, lineMat);
+                mesh.add(wireframe);
+
+                // Posisi rapat (awal)
+                const basePos = new THREE.Vector3(
+                    b.x * u.x,
+                    (b.y * u.y) + (u.y / 2),
+                    b.z * u.z
+                );
+
+                // Vektor arah ledakan/uraian (menjauh dari titik tengah bangun)
+                const dirFromCenter = new THREE.Vector3(
+                    (b.x - centerGrid.x) * u.x * 0.85,
+                    (b.y - centerGrid.y) * u.y * 0.95 + (b.y * 0.35), // Sedikit terangkat ke atas agar lapisan terlihat
+                    (b.z - centerGrid.z) * u.z * 0.85
+                );
+
+                mesh.position.copy(basePos);
+                mesh.userData = {
+                    index: idx,
+                    layerY: b.y,
+                    basePos: basePos,
+                    explodeOffset: dirFromCenter,
+                    isMarked: false,
+                    isHidden: false,
+                    originalColor: new THREE.Color(0xffffff)
+                };
+
+                scene.add(mesh);
+                blockMeshes.push(mesh);
+            });
+
+            updateLevelButtonStyles();
+        }
+
+        // ==========================================
+        // 6. INTERAKSI SENTUH & KONTROL URAIAN
+        // ==========================================
+        function handleBlockTap(clientX, clientY) {
+            pointer.x = (clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            // Hanya cek objek yang sedang terlihat (visible)
+            const visibleMeshes = blockMeshes.filter(m => m.visible);
+            const intersects = raycaster.intersectObjects(visibleMeshes, false);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+
+                if (clickTool === 'inspect') {
+                    // Toggle tanda hitung (menyala hijau/emas)
+                    hitMesh.userData.isMarked = !hitMesh.userData.isMarked;
+                    if (hitMesh.userData.isMarked) {
+                        hitMesh.material.emissive.setHex(0x10b981);
+                        hitMesh.material.emissiveIntensity = 0.45;
+                        playPopSound(580 + (hitMesh.userData.index * 25));
+                    } else {
+                        hitMesh.material.emissive.setHex(0x000000);
+                        hitMesh.material.emissiveIntensity = 0;
+                        playPopSound(380);
+                    }
+                    updateMarkedCounter();
+                } else if (clickTool === 'hide') {
+                    // Lepas / Sembunyikan balok untuk mengintip bagian belakangnya
+                    hitMesh.userData.isHidden = true;
+                    hitMesh.visible = false;
+                    playPopSound(300);
+                }
+            }
+        }
+
+        function updateMarkedCounter() {
+            const markedCount = blockMeshes.filter(m => m.userData.isMarked).length;
+            document.getElementById('marked-count').innerText = markedCount;
+        }
+
+        function clearMarks() {
+            blockMeshes.forEach(m => {
+                m.userData.isMarked = false;
+                m.material.emissive.setHex(0x000000);
+                m.material.emissiveIntensity = 0;
+            });
+            updateMarkedCounter();
+            playPopSound(350);
+        }
+
+        function onExplodeChange(val) {
+            targetExplode = val / 100;
+            document.getElementById('explode-percent').innerText = `${val}% ${val == 0 ? '(Rapat)' : val == 100 ? '(Terurai)' : ''}`;
+            if (val > 50) {
+                isAutoExploded = true;
+                document.getElementById('auto-explode-text').innerText = 'Rapatkan!';
+            } else {
+                isAutoExploded = false;
+                document.getElementById('auto-explode-text').innerText = 'Uraikan!';
+            }
+        }
+
+        function toggleAutoExplode() {
+            isAutoExploded = !isAutoExploded;
+            const slider = document.getElementById('explode-slider');
+            if (isAutoExploded) {
+                slider.value = 85;
+                onExplodeChange(85);
+                playPopSound(620);
+            } else {
+                slider.value = 0;
+                onExplodeChange(0);
+                playPopSound(420);
+            }
+        }
+
+        function cycleLayerFilter() {
+            if (maxLayerInShape === 0) {
+                // Jika hanya 1 lapis, beri info singkat
+                showFeedback('Bangun ini hanya memiliki 1 lapisan dasar.', 'bg-amber-100 text-amber-800');
+                return;
+            }
+
+            if (layerFilter === 'all') {
+                layerFilter = 0;
+            } else if (layerFilter < maxLayerInShape) {
+                layerFilter++;
+            } else {
+                layerFilter = 'all';
+            }
+
+            const btnText = document.getElementById('layer-btn-text');
+            if (layerFilter === 'all') {
+                btnText.innerText = 'Semua Lapis';
+            } else {
+                btnText.innerText = `Lapis ke-${layerFilter + 1}`;
+            }
+
+            applyLayerVisibility();
+            playPopSound(500);
+        }
+
+        function applyLayerVisibility() {
+            blockMeshes.forEach(mesh => {
+                if (mesh.userData.isHidden) {
+                    mesh.visible = false;
+                    return;
+                }
+                if (layerFilter === 'all') {
+                    mesh.visible = true;
+                } else {
+                    mesh.visible = (mesh.userData.layerY === layerFilter);
+                }
+            });
+        }
+
+        function resetCameraAndBlocks() {
+            // Kembalikan semua balok yang disembunyikan & tanda
+            layerFilter = 'all';
+            document.getElementById('layer-btn-text').innerText = 'Semua Lapis';
+            blockMeshes.forEach(m => {
+                m.userData.isHidden = false;
+                m.visible = true;
+            });
+            clearMarks();
+
+            // Rapatkan kembali
+            document.getElementById('explode-slider').value = 0;
+            onExplodeChange(0);
+
+            // Reset posisi kamera
+            camera.position.set(5.5, 5.2, 6.5);
+            controls.target.set(0, 0.8, 0);
+            controls.update();
+            playPopSound(480);
+        }
+
+        // ==========================================
+        // 7. NAVIGASI UI & EVALUASI JAWABAN
+        // ==========================================
+        function setMode(mode) {
+            const btnKubus = document.getElementById('btn-mode-kubus');
+            const btnBalok = document.getElementById('btn-mode-balok');
+
+            if (mode === 'kubus') {
+                btnKubus.className = 'px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all bg-amber-500 text-white shadow';
+                btnBalok.className = 'px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all text-slate-600 hover:text-slate-900';
+            } else {
+                btnBalok.className = 'px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all bg-sky-500 text-white shadow';
+                btnKubus.className = 'px-3 md:px-4 py-2 rounded-lg font-bold text-sm md:text-base transition-all text-slate-600 hover:text-slate-900';
+            }
+
+            currentMode = mode;
+            renderLevelButtons();
+            loadShape(mode, 0);
+            playPopSound(540);
+        }
+
+        function renderLevelButtons() {
+            const container = document.getElementById('level-buttons');
+            container.innerHTML = '';
+            const list = SHAPES_DATA[currentMode];
+
+            list.forEach((item, idx) => {
+                const btn = document.createElement('button');
+                btn.innerText = `${idx + 1}`;
+                btn.onclick = () => {
+                    loadShape(currentMode, idx);
+                    playPopSound(500);
+                };
+                btn.className = 'w-10 h-10 rounded-xl font-display font-bold text-base transition-all flex items-center justify-center shrink-0';
+                container.appendChild(btn);
+            });
+            updateLevelButtonStyles();
+        }
+
+        function updateLevelButtonStyles() {
+            const container = document.getElementById('level-buttons');
+            const buttons = container.querySelectorAll('button');
+            buttons.forEach((btn, idx) => {
+                if (idx === currentLevelIdx) {
+                    btn.className = `w-10 h-10 rounded-xl font-display font-bold text-base transition-all flex items-center justify-center shrink-0 text-white shadow-md scale-105 ${currentMode === 'kubus' ? 'bg-amber-500' : 'bg-sky-500'}`;
+                } else {
+                    btn.className = 'w-10 h-10 rounded-xl font-display font-bold text-base transition-all flex items-center justify-center shrink-0 bg-slate-200/80 text-slate-700 hover:bg-slate-300';
+                }
+            });
+        }
+
+        function setClickTool(tool) {
+            clickTool = tool;
+            const btnInspect = document.getElementById('tool-inspect');
+            const btnHide = document.getElementById('tool-hide');
+
+            if (tool === 'inspect') {
+                btnInspect.className = 'py-2 px-2 rounded-lg text-xs font-bold bg-white text-amber-600 shadow transition';
+                btnHide.className = 'py-2 px-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition';
+            } else {
+                btnHide.className = 'py-2 px-2 rounded-lg text-xs font-bold bg-white text-rose-600 shadow transition';
+                btnInspect.className = 'py-2 px-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition';
+            }
+        }
+
+        function adjustAnswer(delta) {
+            const input = document.getElementById('student-answer');
+            let val = parseInt(input.value) || 0;
+            val = Math.max(0, val + delta);
+            input.value = val;
+            playPopSound(440);
+        }
+
+        function checkAnswer() {
+            const userVal = parseInt(document.getElementById('student-answer').value) || 0;
+            const actualCount = SHAPES_DATA[currentMode][currentLevelIdx].blocks.length;
+            const unitName = currentMode === 'kubus' ? 'kubus satuan' : 'balok satuan';
+
+            if (userVal === actualCount) {
+                showFeedback(`🎉 Hebat! Jawabanmu benar: ada ${actualCount} ${unitName}.`, 'bg-emerald-100 text-emerald-900 border border-emerald-300');
+                playPopSound(780);
+                // Otomatis uraikan sedikit sebagai selebrasi visual
+                if (explodeFactor < 0.3) {
+                    document.getElementById('explode-slider').value = 60;
+                    onExplodeChange(60);
+                }
+            } else if (userVal < actualCount) {
+                showFeedback(`🤔 Masih kurang! Coba geser tombol "Uraikan" untuk melihat ${unitName} yang tersembunyi di bawah/belakang.`, 'bg-amber-100 text-amber-900 border border-amber-300');
+                playPopSound(280);
+            } else {
+                showFeedback(`🧐 Terlalu banyak! Coba gunakan fitur "Tandai Hitung" lalu sentuh satu per satu agar tidak terhitung dua kali.`, 'bg-rose-100 text-rose-900 border border-rose-300');
+                playPopSound(280);
+            }
+        }
+
+        function showFeedback(text, colorClasses) {
+            const box = document.getElementById('feedback-box');
+            box.innerText = text;
+            box.className = `mt-3 p-3 rounded-xl text-xs font-bold animate-pop ${colorClasses}`;
+            box.classList.remove('hidden');
+        }
+
+        // ==========================================
+        // 8. LOOP ANIMASI UTAMA
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Interpolasi halus untuk animasi mengurai (Exploded View)
+            explodeFactor += (targetExplode - explodeFactor) * 0.12;
+
+            blockMeshes.forEach(mesh => {
+                const base = mesh.userData.basePos;
+                const offset = mesh.userData.explodeOffset;
+                mesh.position.set(
+                    base.x + offset.x * explodeFactor,
+                    base.y + offset.y * explodeFactor,
+                    base.z + offset.z * explodeFactor
+                );
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Jalankan saat halaman selesai dimuat
+        window.onload = init3D;
+    </script>
+</body>
+</html>
